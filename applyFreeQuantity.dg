@@ -3,9 +3,9 @@ firstGiftSlab = 20.0;
 secondGiftSlab = 10.0;
 
 // Corresponding Gift item IDs
-item240mm = "954919000000326107";
-item320mm = "954919000004920045";
-item290mm = "954919000005891372";
+item240mm = "954919000000326107"; // Comfortable 240 mm Cotton straight Pads with wings FG
+item320mm = "954919000000326771"; // High Absorption 320 mm XXL Ultra Thin Pads with wings FG
+item290mm = "954919000005891372"; // 290 mm Cotton straight Pads FG
 
 // Get invoice details
 invoiceID = invoice.get("invoice_id");
