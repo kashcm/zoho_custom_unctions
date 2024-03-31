@@ -1,0 +1,64 @@
+// Define rate slabs for gifts
+firstGiftSlab = 20.0;
+secondGiftSlab = 10.0;
+
+// Corresponding Gift item IDs
+item240mm = "954919000000326107";
+item320mm = "954919000004920045";
+item290mm = "954919000005891372";
+
+// Get invoice details
+invoiceID = invoice.get("invoice_id");
+organizationID = organization.get("organization_id");
+customerID = invoice.get("customer_id");
+invDetails = zoho.books.getRecordsByID("Invoices", organizationID, invoiceID, "zbooks").get("invoice");
+lineItems = invDetails.get("line_items").toList();
+
+// Initialize list for updated line items
+updatedLineItems = List();
+
+// Iterate over each item in the invoice
+for each lineItem in lineItems {
+    totalQuantity = lineItem.get("quantity");
+    itemID = lineItem.get("item_id");
+    giftItem = "";
+    freeQuantity = 0;
+
+    // Determine the appropriate gift item based on the totalQuantity
+    if (totalQuantity >= firstGiftSlab && itemID == item240mm) {
+        giftItem = item240mm;
+        freeQuantity = floor(totalQuantity / firstGiftSlab) * 2; // Calculate free quantity based on first gift slab
+    } else if (totalQuantity >= secondGiftSlab) {
+        if (itemID == item320mm) {
+            giftItem = item320mm;
+            freeQuantity = floor(totalQuantity / secondGiftSlab) * 2; // Calculate free quantity based on second gift slab
+        } else if (itemID == item290mm) {
+            giftItem = item290mm;
+            freeQuantity = floor(totalQuantity / secondGiftSlab); // Calculate free quantity based on second gift slab
+        }
+    }
+
+    // If a gift item is selected, add it to the line item in the list of updated line items
+    if (giftItem != "" && freeQuantity > 0) {
+        pMap = Map();
+        pMap.put("item_id", giftItem);
+        pMap.put("description", "Gift Item");
+        pMap.put("rate", 0); // Free gift item, so rate is set to 0
+        pMap.put("quantity", freeQuantity);
+        pMap.put("tax_id", lineItem.get("tax_id")); // Copy tax id from original item
+        updatedLineItems.add(pMap);
+    }
+
+    // Add existing line item to the updated list
+    updatedLineItems.add(lineItem);
+}
+
+// Prepare JSON object for updating the invoice
+json = Map();
+json.put("customer_id", customerID);
+json.put("line_items", updatedLineItems);
+
+// Update the invoice with the updated line items
+res = zoho.books.updateRecord("Invoices", organizationID, invoiceID, json, "zbooks");
+info res.get("message");
+info json;
