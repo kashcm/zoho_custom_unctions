@@ -1,64 +1,89 @@
+
 // Define rate slabs for gifts
-firstGiftSlab = 20.0;
-secondGiftSlab = 10.0;
-
-// Corresponding Gift item IDs
-item240mm = "954919000000326107"; // Comfortable 240 mm Cotton straight Pads with wings FG
-item320mm = "954919000000326771"; // High Absorption 320 mm XXL Ultra Thin Pads with wings FG
-item290mm = "954919000005891372"; // 290 mm Cotton straight Pads FG
-
+giftSlabs = Map();
+giftSlabs.put("first",20.0);
+giftSlabs.put("second",10.0);
+giftSlabs.put("third",5.0);
+// Initialize the gift items list
+giftItems = List();
+// Add gift items
+giftItems.add({"id":"954919000000326107","name":"Comfortable 240 mm Cotton straight Pads with wings FG","slab":"second"});
+giftItems.add({"id":"954919000000326771","name":"High Absorption 320 mm XXL Ultra Thin Pads with wings FG","slab":"third"});
+giftItems.add({"id":"954919000005891372","name":"290 mm Cotton straight Pads FG","slab":"second"});
+giftItems.add({"id":"954919000009524686","name":"Adult Diaper","slab":"third"});
+giftItems.add({"id":"954919000009524699","name":"Adult Diaper XL","slab":"third"});
+giftItems.add({"id":"954919000009524712","name":"Adult Diaper XXL","slab":"third"});
 // Get invoice details
 invoiceID = invoice.get("invoice_id");
 organizationID = organization.get("organization_id");
 customerID = invoice.get("customer_id");
-invDetails = zoho.books.getRecordsByID("Invoices", organizationID, invoiceID, "zbooks").get("invoice");
+invDetails = zoho.books.getRecordsByID("Invoices",organizationID,invoiceID,"zoho_all").get("invoice");
 lineItems = invDetails.get("line_items").toList();
-
 // Initialize list for updated line items
 updatedLineItems = List();
-
+// Function to calculate free quantity based on slab
 // Iterate over each item in the invoice
-for each lineItem in lineItems {
-    totalQuantity = lineItem.get("quantity");
-    itemID = lineItem.get("item_id");
-    giftItem = "";
-    freeQuantity = 0;
-
-    // Determine the appropriate gift item based on the totalQuantity
-    if (totalQuantity >= firstGiftSlab && itemID == item240mm) {
-        giftItem = item240mm;
-        freeQuantity = floor(totalQuantity / firstGiftSlab) * 2; // Calculate free quantity based on first gift slab
-    } else if (totalQuantity >= secondGiftSlab) {
-        if (itemID == item320mm) {
-            giftItem = item320mm;
-            freeQuantity = floor(totalQuantity / secondGiftSlab) * 2; // Calculate free quantity based on second gift slab
-        } else if (itemID == item290mm) {
-            giftItem = item290mm;
-            freeQuantity = floor(totalQuantity / secondGiftSlab); // Calculate free quantity based on second gift slab
-        }
-    }
-
-    // If a gift item is selected, add it to the line item in the list of updated line items
-    if (giftItem != "" && freeQuantity > 0) {
-        pMap = Map();
-        pMap.put("item_id", giftItem);
-        pMap.put("description", "Gift Item");
-        pMap.put("rate", 0); // Free gift item, so rate is set to 0
-        pMap.put("quantity", freeQuantity);
-        pMap.put("tax_id", lineItem.get("tax_id")); // Copy tax id from original item
-        updatedLineItems.add(pMap);
-    }
-
-    // Add existing line item to the updated list
-    updatedLineItems.add(lineItem);
+for each  lineItem in lineItems
+{
+	totalQuantity = lineItem.get("quantity");
+	itemID = lineItem.get("item_id");
+	freeQuantity = 0;
+	// Find gift item and slab
+	for each  giftItem in giftItems
+	{
+		if(giftItem.get("id") == itemID)
+		{
+			slab = giftItem.get("slab");
+			firstGiftSlab = giftSlabs.get("first");
+			secondGiftSlab = giftSlabs.get("second");
+			thirdGiftSlab = giftSlabs.get("third");
+			// Calculate the free quantity based on the slab
+			if(slab == "first" && totalQuantity >= firstGiftSlab)
+			{
+				freeQuantity = floor(totalQuantity / firstGiftSlab) * 2;
+			}
+			else if(slab == "second")
+			{
+				if(itemID == "954919000000326107" && totalQuantity >= 20)
+				{
+					freeQuantity = floor(totalQuantity / 10);
+				}
+				else if(totalQuantity >= secondGiftSlab && itemID != "954919000000326107")
+				{
+					freeQuantity = floor(totalQuantity / secondGiftSlab);
+				}
+			}
+			else if(slab == "third")
+			{
+				if(itemID == "954919000000326771" && totalQuantity > 10)
+				{
+					freeQuantity = floor(totalQuantity / 5);
+				}
+			}
+			if(freeQuantity > 0)
+			{
+				pMap = Map();
+				pMap.put("item_id",itemID);
+				pMap.put("description","Gift Item");
+				pMap.put("rate",0);
+				// Free gift item, so rate is set to 0
+				pMap.put("quantity",freeQuantity);
+				pMap.put("tax_id",lineItem.get("tax_id"));
+				pMap.put("tax_exemption_id",lineItem.get("tax_exemption_id"));
+				pMap.put("tax_exemption_code",lineItem.get("tax_exemption_code"));
+				updatedLineItems.add(pMap);
+			}
+			break;
+		}
+	}
+	// Add existing line item to the updated list
+	updatedLineItems.add(lineItem);
 }
-
 // Prepare JSON object for updating the invoice
 json = Map();
-json.put("customer_id", customerID);
-json.put("line_items", updatedLineItems);
-
+json.put("customer_id",customerID);
+json.put("line_items",updatedLineItems);
 // Update the invoice with the updated line items
-res = zoho.books.updateRecord("Invoices", organizationID, invoiceID, json, "zbooks");
+res = zoho.books.updateRecord("Invoices",organizationID,invoiceID,json,"zoho_all");
 info res.get("message");
 info json;
