@@ -1,0 +1,183 @@
+estimateID = estimate.get("estimate_id");
+estimatedate = estimate.get("date").toDate();
+organizationID = organization.get("organization_id");
+customerID = estimate.get("customer_id");
+dc = organization.get("data_center_extension");
+apiUrl = organization.get("api_root_endpoint");
+estimateDetails = invokeurl
+[
+    url : apiUrl + "/estimates/" + estimateID + "?organization_id=" + organizationID
+    type : GET
+    connection : "zoho_all"
+];
+estimateDetails = estimateDetails.get("estimate");
+dis = estimateDetails.get("is_discount_before_tax");
+info estimateDetails;
+estimateCreationDate = estimateDetails.get("created_time").toDate();
+info estimateCreationDate;
+cpList = List();
+cpList = estimateDetails.get("contact_persons").toList();
+estimate_number = estimateDetails.get("estimate_number");
+discountType = estimateDetails.get("discount_type");
+discount = estimateDetails.get("discount");
+shippingCharge = estimateDetails.get("shipping_charge");
+adjustment = estimateDetails.get("adjustment");
+shipping_charge_tax_id = estimateDetails.get("shipping_charge_tax_id");
+is_inclusive_tax = estimateDetails.get("is_inclusive_tax");
+salespersonID = estimateDetails.get("salesperson_id");
+estimateCreationDate = estimateDetails.get("created_date").toDate();  // Adjusted to use .toDate()
+info estimateCreationDate;
+lineItems = estimateDetails.get("line_items").toList();
+lineList = List();
+lineListMap = Map();
+
+for each  find in lineItems
+{
+    lineMap = Map();
+    itemCustomFields = find.get("item_custom_fields").toList();
+    taxID = find.get("tax_id");
+    taxPercent = find.get("tax_id");  // This appears to be a typo. It should probably be find.get("tax_percent") if you have such a field.
+    info find;
+    itemCF = List();
+    for each  findCF in itemCustomFields
+    {
+        itemLab = findCF.get("label");
+        itemVal = findCF.get("value");
+        iMap = Map();
+        iMap.put("label", itemLab);
+        iMap.put("value", itemVal);
+        itemCF.add(iMap);
+    }
+    if(discountType.equalsIgnoreCase("multi_discount"))
+    {
+        discounts = find.get("discounts");
+        info discounts;
+        disList = List();
+        for each  dis in discounts
+        {
+            discountMap = Map();
+            discount_amount = dis.get("discount_amount");
+            discount_percent = dis.get("discount_percent");
+            discount_order = dis.get("discount_order");
+            discountMap.put("discount_amount", discount_amount);
+            discountMap.put("discount_percent", discount_percent);
+            discountMap.put("discount_order", discount_order);
+            disList.add(discountMap);
+        }
+        find.put("discounts", disList);
+    }
+    find.remove("item_custom_fields");
+    find.remove("line_item_id");
+    find.put("item_custom_fields", itemCF);
+    lineList.add(find);
+    if(taxID.isNull())
+    {
+        iList = List();
+        itemValue = lineListMap.get("non_tax");
+        if(itemValue.isNull())
+        {
+            iList.add(find);
+        }
+        else
+        {
+            iList.addAll(itemValue);
+            iList.add(find);
+        }
+        lineListMap.put("non_tax", iList);
+    }
+    else
+    {
+        iList = List();
+        itemValue = lineListMap.get("taxable");
+        if(itemValue.isNull())
+        {
+            iList.add(find);
+        }
+        else
+        {
+            iList.addAll(itemValue);
+            iList.add(find);
+        }
+        lineListMap.put("taxable", iList);
+    }
+}
+info lineListMap;
+getSOCustomFields = invokeurl
+[
+    url : apiUrl + "/settings/fields?entity=invoice&organization_id=" + organizationID
+    type : GET
+    connection : "zoho_all"
+];
+getSOCustomFields = getSOCustomFields.get("fields").toList();
+estimateCustomFields = estimateDetails.get("custom_fields").toList();
+cfList = List();
+for each  findEstimateCF in estimateCustomFields
+{
+    estimateCF_isActive = findEstimateCF.get("is_active");
+    estimateCF_dataType = findEstimateCF.get("data_type");
+    estimateCF_label = findEstimateCF.get("label");
+    estimateCF_value = findEstimateCF.get("value");
+    for each  findSOCF in getSOCustomFields
+    {
+        SOCF_isActive = findSOCF.get("is_active");
+        SOCF_dataType = findSOCF.get("data_type");
+        SOCF_label = findSOCF.get("field_name_formatted");
+        if(estimateCF_label == "cf_order_date" && SOCF_label == "cf_order_date")
+        {
+            cMap = Map();
+            cMap.put("label", "cf_order_date");
+            cMap.put("value", estimateCreationDate.toString("yyyy-MM-dd"));  // Ensure date format is correct
+            cfList.add(cMap);
+        }
+        else if(estimateCF_isActive && SOCF_isActive && estimateCF_dataType == SOCF_dataType && estimateCF_label == SOCF_label)
+        {
+            cMap = Map();
+            cMap.put("label", SOCF_label);
+            cMap.put("value", estimateCF_value);
+            cfList.add(cMap);
+        }
+    }
+}
+json = Map();
+json.put("customer_id", customerID);
+json.put("invoiced_estimate_id", estimateID);
+json.put("reference_number", estimate_number);
+json.put("contact_persons", cpList);
+json.put("txn_posting_date", estimateCreationDate.toString("yyyy-MM-dd"));  // Ensure date format is correct
+json.put("custom_fields", cfList);
+json.put("shipping_charge", shippingCharge);
+json.put("adjustment", adjustment);
+json.put("is_inclusive_tax", is_inclusive_tax);
+
+if(!shipping_charge_tax_id.isNull())
+{
+    json.put("shipping_charge_tax_id", shipping_charge_tax_id);
+}
+
+params = Map();
+params.put("JSONString", json);
+params.put("force_execute_customfunction", true);
+createInvoice = invokeurl
+[
+    url : apiUrl + "/invoices?organization_id=" + organizationID
+    type : POST
+    parameters : params
+    connection : "zoho_all"
+];
+info createInvoice.get("message");
+soCode = createInvoice.get("code");
+if(soCode != 0)
+{
+    cmt = Map();
+    cmt.put("description", "Failed to create an invoice");
+    cmtMap = Map();
+    cmtMap.put("JSONString", cmt);
+    comment = invokeurl
+    [
+        url : apiUrl + "/estimates/" + estimateID + "/comments?organization_id=" + organizationID
+        type : POST
+        parameters : cmtMap
+        connection : "zoho_all"
+    ];
+    info "cmt==" + comment;
+}
